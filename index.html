@@ -1,0 +1,1395 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>MR-BDSM TETRIS</title>
+  <style>
+    :root{
+      --bg:#070915;
+      --text:#e8eeff;
+      --muted:#9fb0d8;
+      --border:rgba(255,255,255,.14);
+      --glow:rgba(122,180,255,.35);
+
+      --pad: 10px;
+      --btn: 56px;
+      --btnR: 16px;
+
+      --panelW: clamp(140px, 32vw, 210px); /* right sidebar */
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background:
+        radial-gradient(900px 480px at 25% 10%, #1a2b68 0%, var(--bg) 58%),
+        radial-gradient(900px 480px at 80% 60%, #2a1147 0%, var(--bg) 60%);
+      color:var(--text);
+      overflow:hidden;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    .app{ height: 100dvh; display:flex; flex-direction:column; }
+
+    /* ===== Top bar ===== */
+    .topbar{
+      padding: calc(var(--pad) + env(safe-area-inset-top)) var(--pad) var(--pad);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.42), rgba(0,0,0,.05));
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(8px);
+      min-height: 56px;
+    }
+    .brand{ display:flex; flex-direction:column; gap:2px; min-width: 160px; }
+    .brand .name{
+      font-weight:1100;
+      letter-spacing:1.6px;
+      text-transform:uppercase;
+      font-size:12px;
+      text-shadow: 0 0 12px rgba(140,200,255,.18);
+      line-height:1.05;
+      white-space:nowrap;
+    }
+    .brand .state{ font-size:10px; color:var(--muted); white-space:nowrap; }
+    .topActions{ display:flex; gap:8px; align-items:center; }
+
+    button{
+      cursor:pointer;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius: 14px;
+      font-weight:900;
+      letter-spacing:.2px;
+      user-select:none;
+      -webkit-user-select:none;
+      touch-action:none;
+    }
+    button:active{ transform: translateY(1px); background: rgba(255,255,255,.10); }
+
+    .iconBtn{
+      width: 44px;
+      height: 44px;
+      padding:0;
+      display:grid;
+      place-items:center;
+      font-size:18px;
+      border-radius: 14px;
+      box-shadow: 0 10px 22px rgba(0,0,0,.25);
+      background: rgba(255,255,255,.08);
+    }
+
+    /* ===== Stage ===== */
+    .stage{
+      flex: 1 1 auto;
+      padding: 8px var(--pad);
+      min-height: 0;
+      display:flex;
+      justify-content:center;
+      align-items:stretch;
+    }
+    .wrap{
+      width: 100%;
+      height: 100%;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    /* Portrait HUD (shows stats + next without needing sideways phone) */
+    .hudRow{ display:none; gap:10px; align-items:stretch; flex: 0 0 auto; }
+    .hudCard{
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.22));
+      box-shadow: 0 18px 40px rgba(0,0,0,.30);
+      padding: 10px;
+      min-width:0;
+    }
+    .hudCard .h{
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.8px;
+      text-transform:uppercase;
+      margin-bottom:8px;
+    }
+    .hudStats{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .miniStat{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding:6px 0;
+    }
+    .miniStat:last-child{ border-bottom:0; padding-bottom:0; }
+    .k{ font-size:10px; color: var(--muted); }
+    .v{ font-size:16px; font-weight:1100; letter-spacing:.2px; }
+
+    #nextSmall{
+      width: 92px;
+      height: 70px;
+      image-rendering: pixelated;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      display:block;
+    }
+
+    /* Board + right sidebar (landscape / wide) */
+    .playArea{
+      flex: 1 1 auto;
+      min-height:0;
+      display:grid;
+      grid-template-columns: 1fr var(--panelW);
+      gap: 12px;
+      align-items: center;
+      justify-content: stretch;
+    }
+
+    .boardShell{
+      justify-self: stretch;
+      align-self: center;
+
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.22));
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      padding: 10px;
+      width: fit-content;
+      flex: 0 0 auto;
+    }
+    #board{
+      background:#050711;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+      image-rendering: pixelated;
+      touch-action:none;
+      display:block;
+    }
+
+    .sidePanel{
+      width: var(--panelW);
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.22));
+      box-shadow: 0 24px 60px rgba(0,0,0,.35);
+      padding: 10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      flex: 0 0 auto;
+    }
+    .panelCard{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      border-radius: 16px;
+      padding: 10px;
+    }
+    .panelCard .h{
+      font-size:10px;
+      color: var(--muted);
+      letter-spacing:.8px;
+      text-transform:uppercase;
+      margin-bottom:8px;
+    }
+    .statRow{
+      display:flex;
+      justify-content:space-between;
+      align-items:baseline;
+      gap:10px;
+      padding:6px 0;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .statRow:last-child{ border-bottom: 0; padding-bottom:0; }
+
+    .nextBox{ display:flex; justify-content:center; align-items:center; }
+    #next{
+      width: 120px;
+      height: 90px;
+      image-rendering: pixelated;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      display:block;
+    }
+
+    /* ===== Controls ===== */
+    .controls{
+      flex: 0 0 auto;
+      padding: 10px var(--pad) calc(10px + env(safe-area-inset-bottom));
+      border-top: 1px solid rgba(255,255,255,.10);
+      background: linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.55));
+      backdrop-filter: blur(8px);
+    }
+    .controlsInner{
+      width: min(980px, 100%);
+      margin: 0 auto;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap: 12px;
+    }
+
+    .padGrid{
+      display:grid;
+      grid-template-columns: var(--btn) var(--btn) var(--btn);
+      grid-template-rows: var(--btn) var(--btn);
+      gap:8px;
+      align-items:center;
+      justify-items:center;
+    }
+    .padGrid .sp{ opacity:0; pointer-events:none; }
+
+    /* Simplified right-hand action stack: ROT + MENY (no duplicate pause) */
+    .actStack{
+      display:grid;
+      grid-template-columns: 1fr;
+      grid-auto-rows: var(--btn);
+      gap:8px;
+      align-items:center;
+      justify-items:end;
+    }
+
+    .mcBtn{
+      width: var(--btn);
+      height: var(--btn);
+      border-radius: var(--btnR);
+      padding:0;
+      font-size:18px;
+      display:grid;
+      place-items:center;
+      background: rgba(255,255,255,.08);
+      box-shadow: 0 12px 26px rgba(0,0,0,.35);
+    }
+    .mcBtn.big{
+      width: calc(var(--btn) + 10px);
+      height: var(--btn);
+      font-size:13px;
+      letter-spacing:.4px;
+    }
+    .mcBtn.wide{
+      width: calc((var(--btn) + 10px) * 2 + 8px);
+      height: var(--btn);
+      font-size:13px;
+      letter-spacing:.4px;
+    }
+
+    .metaLine{
+      display:flex;
+      justify-content:space-between;
+      color: rgba(255,255,255,.62);
+      font-size:10px;
+      margin-top:8px;
+    }
+
+    /* ===== Overlays ===== */
+    .overlay{
+      position:fixed;
+      inset:0;
+      display:grid;
+      place-items:center;
+      padding: 16px;
+      background: rgba(2,3,7,0.78);
+      backdrop-filter: blur(6px);
+      z-index: 50;
+    }
+    .overlay.hidden{ display:none; }
+
+    .panel{
+      width:min(640px, 100%);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:18px;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(0,0,0,.26));
+      box-shadow: 0 26px 70px rgba(0,0,0,.6);
+      padding:16px;
+    }
+
+    .retroTitle{
+      text-align:center;
+      padding:12px 12px 10px;
+      border-radius:16px;
+      background: rgba(0,0,0,.26);
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    .retroTitle .mr{
+      font-size:18px;
+      font-weight:1100;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      color:#eaf0ff;
+      text-shadow: 0 0 10px var(--glow), 0 0 24px rgba(255,255,255,.12);
+    }
+    .retroTitle .tetris{
+      margin-top:6px;
+      font-size:42px;
+      font-weight:1200;
+      letter-spacing:4px;
+      text-transform:uppercase;
+      background: linear-gradient(90deg, #50e3ff, #ffd54a, #c277ff, #6dff7a, #ff5b5b, #5b8cff, #ff9f43);
+      -webkit-background-clip:text;
+      background-clip:text;
+      color:transparent;
+      text-shadow: 0 0 22px rgba(140,200,255,.24), 0 0 50px rgba(255,255,255,.10);
+    }
+
+    .grid2{ display:grid; grid-template-columns: 1fr; gap:10px; margin-top:12px; }
+    .box{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:16px;
+      background: rgba(0,0,0,.18);
+      padding:10px 12px;
+    }
+    .hsList{
+      margin:6px 0 0;
+      padding-left:18px;
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.45;
+    }
+    .actions{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
+
+    /* Menu overlay */
+    .menuOverlay .panel{ width:min(520px, 100%); }
+    .menuTitle{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .menuTitle b{ letter-spacing:1px; text-transform:uppercase; font-size:12px; }
+    .menuRow{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:10px 10px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      border-radius: 16px;
+      margin-bottom:10px;
+    }
+    .menuRow .left{ display:flex; flex-direction:column; gap:2px; min-width: 0; }
+    .menuRow .left .t{ font-size:12px; font-weight:1000; }
+    .menuRow .left .d{ font-size:10px; color:var(--muted); line-height:1.3; }
+    .toggle{ display:flex; gap:8px; align-items:center; }
+    input[type="checkbox"]{ width: 18px; height: 18px; accent-color: #50e3ff; }
+    input[type="range"]{ width: 150px; }
+
+    .note{
+      color: var(--muted);
+      font-size:11px;
+      line-height:1.45;
+      margin-top:8px;
+      text-align:center;
+    }
+
+    /* ===== Responsive rules ===== */
+      .sidePanel{ display:flex; }
+      :root{ --panelW: clamp(132px, 28vw, 180px); }
+      .playArea{ justify-content:flex-start; }
+    }
+      .hudRow{ display:flex; }
+      .sidePanel{ display:flex; }
+      .playArea{ justify-content:flex-start; gap:10px; }
+      #next{ width: 104px; height: 78px; }
+    }
+      .hudRow{ display:flex; }
+      .sidePanel{ display:flex; }
+      .playArea{ justify-content:flex-start; gap:10px; }
+      #next{ width: 104px; height: 78px; }
+    }
+      .hudRow{ display:flex; }
+      .playArea{ justify-content:center; }
+      .sidePanel{ display:flex; }  /* portrait: no sidebar */
+      .hudRow .hudCard{ flex: 1 1 0; }
+      .hudRow .hudCard.next{ flex: 0 0 auto; }
+    }
+    @media (max-height: 420px){
+      /* super-short landscape: shrink buttons a bit */
+      :root{ --btn: 48px; --btnR: 14px; }
+      .metaLine{ display:none; }
+    }
+    @media (min-width: 980px){
+      :root{ --panelW: 190px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="name">MR-BDSM TETRIS</div>
+        <div class="state" id="stateText">Intro</div>
+      </div>
+      <div class="topActions">
+        <button id="btnPauseTop" class="iconBtn" title="Paus/Fortsätt" aria-label="Paus/Fortsätt">⏸</button>
+        <button id="btnMenu" class="iconBtn" title="Meny" aria-label="Meny">☰</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <div class="wrap">
+        <!-- Portrait HUD (visible on small screens) -->
+        <div class="hudRow" aria-label="HUD">
+          <div class="hudCard next">
+            <div class="h">Nästa</div>
+            <canvas id="nextSmall" width="120" height="90" aria-label="Nästa kloss (liten)"></canvas>
+          </div>
+          <div class="hudCard" style="flex:1;">
+            <div class="h">Stats</div>
+            <div class="hudStats">
+              <div class="miniStat"><div class="k">Poäng</div><div class="v" id="score2">0</div></div>
+              <div class="miniStat"><div class="k">Highscore</div><div class="v" id="bestInline2">0</div></div>
+              <div class="miniStat"><div class="k">Rader</div><div class="v" id="lines2">0</div></div>
+              <div class="miniStat"><div class="k">Nivå</div><div class="v" id="level2">1</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="playArea">
+          <div class="boardShell">
+            <canvas id="board" width="320" height="640" aria-label="Spelplan"></canvas>
+          </div>
+
+          <aside id="sidePanel" class="sidePanel" aria-label="Sidopanel">
+            <div id="nextCard" class="panelCard">
+              <div class="h">Nästa</div>
+              <div class="nextBox">
+                <canvas id="next" width="140" height="100" aria-label="Nästa kloss"></canvas>
+              </div>
+            </div>
+
+            <div class="panelCard">
+              <div class="h">Stats</div>
+              <div class="statRow"><div class="k">Poäng</div><div class="v" id="score">0</div></div>
+              <div class="statRow"><div class="k">Rader</div><div class="v" id="lines">0</div></div>
+              <div class="statRow"><div class="k">Nivå</div><div class="v" id="level">1</div></div>
+            </div>
+
+            <div class="panelCard">
+              <div class="h">Bästa</div>
+              <div class="statRow"><div class="k">Highscore</div><div class="v" id="bestInline">0</div></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </main>
+
+    <footer class="controls" aria-label="Mobilkontroller">
+      <div class="controlsInner">
+        <!-- Left thumb: movement + DROP -->
+        <div>
+          <div class="padGrid" role="group" aria-label="Riktning">
+            <div class="sp">.</div>
+            <button class="mcBtn" id="mDrop" title="Hard drop">DROP</button>
+            <div class="sp">.</div>
+            <button class="mcBtn" id="mLeft" title="Vänster">◀</button>
+            <button class="mcBtn" id="mDown" title="Ner">▼</button>
+            <button class="mcBtn" id="mRight" title="Höger">▶</button>
+          </div>
+        </div>
+
+        <!-- Right thumb: ROT + MENY -->
+        <div class="actStack" role="group" aria-label="Action">
+          <button class="mcBtn big" id="mRotate" title="Rotera">ROT</button>
+          <button class="mcBtn wide" id="mMenu" title="Meny">MENY</button>
+        </div>
+      </div>
+      <div class="metaLine">
+        <div>Håll inne: ← → ▼</div>
+        <div>Tryck: ROT / DROP</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Splash -->
+  <div id="splash" class="overlay">
+    <div class="panel">
+      <div class="retroTitle">
+        <div class="mr">MR-BDSM</div>
+        <div class="tetris">TETRIS</div>
+      </div>
+
+      <div class="grid2">
+        <div class="box">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;">
+            <div>
+              <div style="font-size:10px;color:var(--muted);">Bästa poäng</div>
+              <div style="font-size:22px;font-weight:1200;" id="bestScore">0</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:10px;color:var(--muted);">Ljud</div>
+              <div style="font-weight:1000;">Kräver 1 tryck</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:8px;">Topplista</div>
+          <ol class="hsList" id="hsList"></ol>
+        </div>
+
+        <div class="box">
+          <b>Kontroller</b><br>
+          Mobil: knappar längst ner. Paus uppe till höger. Meny = inställningar & omstart.<br>
+          Tangentbord: ←/→ flytta • ↓ soft drop • Mellanslag hard drop • ↑/X rotera • Z bakåt • P paus • R omstart
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnStart" style="padding:12px 16px;">Starta</button>
+        <button id="btnCloseSplash">Stäng</button>
+      </div>
+
+      <div class="note">
+        Tips: om du öppnar filen i en “förhandsvisare” kan ljud blockas – öppna i Chrome för full effekt.
+      </div>
+    </div>
+  </div>
+
+  <!-- Hamburger Menu -->
+  <div id="menu" class="overlay hidden menuOverlay">
+    <div class="panel">
+      <div class="menuTitle">
+        <b>MENY</b>
+        <button id="btnCloseMenu" class="iconBtn" aria-label="Stäng">✕</button>
+      </div>
+
+      <div class="menuRow">
+        <div class="left">
+          <div class="t">Musik</div>
+          <div class="d">Klassisk Tetris-melodi (Korobeiniki). Slider = volym.</div>
+        </div>
+        <div class="toggle" style="flex-direction:column;align-items:flex-end;">
+          <label style="display:flex;gap:8px;align-items:center;font-size:11px;">
+            <input id="musicEnabled" type="checkbox" />
+            På
+          </label>
+          <input id="musicVol" type="range" min="0" max="100" step="1" />
+        </div>
+      </div>
+
+      <div class="menuRow">
+        <div class="left">
+          <div class="t">Visa “Nästa kloss”</div>
+          <div class="d">Påverkar både HUD (porträtt) och sidopanel (landskap).</div>
+        </div>
+        <div class="toggle">
+          <input id="showNext" type="checkbox" />
+        </div>
+      </div>
+
+      <div class="menuRow">
+        <div class="left">
+          <div class="t">Paus</div>
+          <div class="d">Stoppar tiden. (Du kan också trycka ⏸ uppe.)</div>
+        </div>
+        <div class="toggle">
+          <button id="btnPauseMenu">Pausa/Fortsätt</button>
+        </div>
+      </div>
+
+      <div class="menuRow">
+        <div class="left">
+          <div class="t">Starta om</div>
+          <div class="d">Nollställer poäng och bräde.</div>
+        </div>
+        <div class="toggle">
+          <button id="btnRestartMenu">Starta om</button>
+        </div>
+      </div>
+
+      <div class="menuRow" style="margin-bottom:0;">
+        <div class="left">
+          <div class="t">Ljudeffekter</div>
+          <div class="d">På/av (flytt, rotation, rader).</div>
+        </div>
+        <div class="toggle">
+          <label style="display:flex;gap:8px;align-items:center;font-size:11px;">
+            <input id="sfxEnabled" type="checkbox" />
+            På
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ===== Elements =====
+  const boardCanvas = document.getElementById('board');
+  const ctx = boardCanvas.getContext('2d', { alpha: true });
+
+  const nextCanvas = document.getElementById('next');
+  const nctx = nextCanvas.getContext('2d', { alpha: true });
+
+  const nextSmallCanvas = document.getElementById('nextSmall');
+  const nctxSmall = nextSmallCanvas.getContext('2d', { alpha: true });
+
+  const $score = document.getElementById('score');
+  const $lines = document.getElementById('lines');
+  const $level = document.getElementById('level');
+  const $stateText = document.getElementById('stateText');
+  const $bestInline = document.getElementById('bestInline');
+
+  // portrait HUD mirrors
+  const $score2 = document.getElementById('score2');
+  const $lines2 = document.getElementById('lines2');
+  const $level2 = document.getElementById('level2');
+  const $bestInline2 = document.getElementById('bestInline2');
+
+  const nextCard = document.getElementById('nextCard');
+
+  const btnPauseTop = document.getElementById('btnPauseTop');
+  const btnMenu = document.getElementById('btnMenu');
+
+  const splash = document.getElementById('splash');
+  const btnStart = document.getElementById('btnStart');
+  const btnCloseSplash = document.getElementById('btnCloseSplash');
+  const $bestScore = document.getElementById('bestScore');
+  const $hsList = document.getElementById('hsList');
+
+  const menu = document.getElementById('menu');
+  const btnCloseMenu = document.getElementById('btnCloseMenu');
+  const btnPauseMenu = document.getElementById('btnPauseMenu');
+  const btnRestartMenu = document.getElementById('btnRestartMenu');
+
+  const showNextToggle = document.getElementById('showNext');
+  const musicEnabledToggle = document.getElementById('musicEnabled');
+  const musicVolSlider = document.getElementById('musicVol');
+  const sfxEnabledToggle = document.getElementById('sfxEnabled');
+
+  // Mobile controls
+  const mLeft = document.getElementById('mLeft');
+  const mRight = document.getElementById('mRight');
+  const mDown = document.getElementById('mDown');
+  const mRotate = document.getElementById('mRotate');
+  const mDrop = document.getElementById('mDrop');
+  const mMenu = document.getElementById('mMenu');
+
+  // ===== Settings (localStorage) =====
+  const SETTINGS_KEY = "mr_bdsm_tetris_settings_v3";
+  const defaultSettings = {
+    showNext: true,
+    musicEnabled: true,
+    musicVol: 55,
+    sfxEnabled: true
+  };
+  let settings = { ...defaultSettings };
+
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      const obj = raw ? JSON.parse(raw) : null;
+      if(obj && typeof obj === "object"){
+        settings = { ...defaultSettings, ...obj };
+      }
+    }catch{}
+  }
+  function saveSettings(){
+    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch{}
+  }
+
+  // ===== Responsive board sizing =====
+  function isPortraitHUD(){
+    return window.matchMedia("(max-width: 560px)").matches;
+  }
+  function resizeBoard(){
+    const stage = document.querySelector('.stage');
+    const playArea = document.querySelector('.playArea');
+    const sidebar = document.getElementById('sidePanel');
+
+    // Available height inside stage (minus a small padding)
+    const availH = stage.clientHeight - 8;
+
+    // Sidebar width (computed) + gap
+    const sidebarW = (getComputedStyle(sidebar).display !== "none")
+      ? (sidebar.getBoundingClientRect().width + 12)
+      : 0;
+
+    const availW = playArea.clientWidth - sidebarW - 8;
+
+    // Board is 10x20 => height = 2 * width
+    const wByH = Math.floor(availH / 2);
+    let targetW = Math.min(availW, wByH);
+
+    // Keep it playable on narrow screens
+    targetW = Math.max(220, Math.floor(targetW));
+
+    boardCanvas.style.width = targetW + "px";
+    boardCanvas.style.height = (targetW * 2) + "px";
+  }
+  window.addEventListener("resize", resizeBoard);
+  window.addEventListener("orientationchange", () => setTimeout(resizeBoard, 180));
+
+  // ===== Game constants =====
+  const COLS = 10, ROWS = 20, HIDDEN = 2;
+  const BLOCK = Math.floor(boardCanvas.width / COLS);
+  boardCanvas.width = COLS * BLOCK;
+  boardCanvas.height = ROWS * BLOCK;
+
+  const N_BLOCK = 16;
+
+  const COLORS = {
+    I: '#50e3ff', O: '#ffd54a', T: '#c277ff', S: '#6dff7a',
+    Z: '#ff5b5b', J: '#5b8cff', L: '#ff9f43',
+    GHOST: 'rgba(255,255,255,0.18)', GRID: 'rgba(255,255,255,0.06)'
+  };
+
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    O: [[0,1,1,0],[0,1,1,0],[0,0,0,0],[0,0,0,0]],
+    T: [[0,1,0,0],[1,1,1,0],[0,0,0,0],[0,0,0,0]],
+    S: [[0,1,1,0],[1,1,0,0],[0,0,0,0],[0,0,0,0]],
+    Z: [[1,1,0,0],[0,1,1,0],[0,0,0,0],[0,0,0,0]],
+    J: [[1,0,0,0],[1,1,1,0],[0,0,0,0],[0,0,0,0]],
+    L: [[0,0,1,0],[1,1,1,0],[0,0,0,0],[0,0,0,0]],
+  };
+  const TYPES = Object.keys(SHAPES);
+
+  // ===== Highscore =====
+  const HS_KEY = "mr_bdsm_tetris_highscores_v5";
+  function loadHighscores(){
+    try{
+      const raw = localStorage.getItem(HS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if(!Array.isArray(arr)) return [];
+      return arr.filter(n => Number.isFinite(n)).map(n => Math.max(0, Math.floor(n)));
+    }catch{ return []; }
+  }
+  function saveHighscores(arr){
+    try{ localStorage.setItem(HS_KEY, JSON.stringify(arr.slice(0,10))); }catch{}
+  }
+  function renderHighscores(){
+    const hs = loadHighscores();
+    const best = hs[0] ?? 0;
+    $bestScore.textContent = best;
+    $bestInline.textContent = best;
+    $bestInline2.textContent = best;
+
+    $hsList.innerHTML = "";
+    const top = hs.slice(0,5);
+    if(top.length === 0){
+      const li = document.createElement("li");
+      li.textContent = "Inga än – bli först 😈";
+      $hsList.appendChild(li);
+      return;
+    }
+    for(const n of top){
+      const li = document.createElement("li");
+      li.textContent = n.toString();
+      $hsList.appendChild(li);
+    }
+  }
+  function addHighscore(s){
+    const hs = loadHighscores();
+    hs.push(s);
+    hs.sort((a,b)=>b-a);
+    saveHighscores(hs);
+    renderHighscores();
+  }
+
+  // ===== Audio =====
+  let audioCtx = null;
+  let audioUnlocked = false;
+
+  let sfxEnabled = true;
+  let musicEnabled = true;
+  let musicVolume = 0.55;
+
+  let masterGain = null;
+  let sfxGain = null;
+  let musicGain = null;
+
+  function ensureAudio(){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    if(!audioCtx) audioCtx = new AC();
+    if(!masterGain){
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.9;
+      masterGain.connect(audioCtx.destination);
+
+      sfxGain = audioCtx.createGain();
+      sfxGain.gain.value = 0.10;
+      sfxGain.connect(masterGain);
+
+      musicGain = audioCtx.createGain();
+      musicGain.gain.value = musicVolume;
+      musicGain.connect(masterGain);
+    }
+    if(musicGain) musicGain.gain.value = Math.max(0, Math.min(1, musicVolume));
+    if(sfxGain) sfxGain.gain.value = sfxEnabled ? 0.10 : 0.0;
+
+    if(audioCtx.state === "suspended"){
+      audioCtx.resume().then(()=>{}).catch(()=>{});
+    }
+  }
+  function unlockAudio(){
+    if(audioUnlocked) return;
+    ensureAudio();
+    if(audioCtx){
+      audioCtx.resume().then(()=>{ audioUnlocked = true; }).catch(()=>{});
+    }else{
+      audioUnlocked = true;
+    }
+  }
+
+  function sfxBeep(freq=440, dur=0.06, type="square", gain=0.9){
+    if(!sfxEnabled) return;
+    ensureAudio();
+    if(!audioCtx || audioCtx.state !== "running" || !sfxGain) return;
+
+    const t0 = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+    o.connect(g).connect(sfxGain);
+    o.start(t0);
+    o.stop(t0 + dur + 0.02);
+  }
+  function sfxChord(freqs, dur=0.14, type="triangle", gain=0.8){
+    if(!sfxEnabled) return;
+    ensureAudio();
+    if(!audioCtx || audioCtx.state !== "running" || !sfxGain) return;
+
+    const t0 = audioCtx.currentTime;
+    const out = audioCtx.createGain();
+    out.gain.setValueAtTime(0.0001, t0);
+    out.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+    out.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    out.connect(sfxGain);
+
+    for(const f of freqs){
+      const o = audioCtx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f, t0);
+      o.connect(out);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+    }
+  }
+
+  // Korobeiniki (public domain melody)
+  const NOTE = { A4:440.00, B4:493.88, C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00 };
+  const THEME = [
+    [NOTE.E5,1],[NOTE.B4,0.5],[NOTE.C5,0.5],[NOTE.D5,1],[NOTE.C5,0.5],[NOTE.B4,0.5],[NOTE.A4,1],
+    [NOTE.A4,0.5],[NOTE.C5,0.5],[NOTE.E5,1],[NOTE.D5,0.5],[NOTE.C5,0.5],[NOTE.B4,1],
+    [NOTE.B4,0.5],[NOTE.C5,0.5],[NOTE.D5,1],[NOTE.E5,1],[NOTE.C5,1],[NOTE.A4,1],[NOTE.A4,1],
+    [NOTE.D5,1],[NOTE.F5,0.5],[NOTE.A5,0.5],[NOTE.G5,1],[NOTE.F5,0.5],[NOTE.E5,0.5],[NOTE.C5,1],
+    [NOTE.E5,0.5],[NOTE.G5,0.5],[NOTE.F5,1],[NOTE.E5,0.5],[NOTE.D5,0.5],[NOTE.C5,1],
+    [NOTE.B4,0.5],[NOTE.C5,0.5],[NOTE.D5,1],[NOTE.E5,1],[NOTE.C5,1],[NOTE.A4,1],[NOTE.A4,1],
+  ];
+  let musicTimer = null;
+  let musicIndex = 0;
+  let bpm = 150;
+  function beatSec(){ return 60 / bpm; }
+  function playMusicNote(freq, durSec){
+    if(!musicEnabled || musicVolume <= 0) return;
+    ensureAudio();
+    if(!audioCtx || audioCtx.state !== "running" || !musicGain) return;
+
+    const t0 = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+
+    o.type = "square";
+    o.frequency.setValueAtTime(freq, t0);
+
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.6, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + durSec);
+
+    o.connect(g).connect(musicGain);
+    o.start(t0);
+    o.stop(t0 + durSec + 0.02);
+  }
+  function startMusic(){
+    stopMusic();
+    if(!audioUnlocked) return;
+    if(!musicEnabled || musicVolume <= 0) return;
+
+    const tickMs = Math.floor(beatSec() * 500);
+    musicTimer = setInterval(() => {
+      if(!started || paused || gameOver) return;
+      if(!audioCtx || audioCtx.state !== "running") return;
+      if(!musicEnabled || musicVolume <= 0) return;
+      const [freq, beats] = THEME[musicIndex];
+      const dur = Math.max(0.06, beats * beatSec() * 0.92);
+      playMusicNote(freq, dur);
+      musicIndex = (musicIndex + 1) % THEME.length;
+    }, tickMs);
+  }
+  function stopMusic(){
+    if(musicTimer) clearInterval(musicTimer);
+    musicTimer = null;
+  }
+
+  function applySettings(){
+    nextCard.style.display = settings.showNext ? "block" : "none";
+    nextSmallCanvas.style.display = settings.showNext ? "block" : "none";
+
+    showNextToggle.checked = !!settings.showNext;
+    musicEnabledToggle.checked = !!settings.musicEnabled;
+    musicVolSlider.value = String(Math.max(0, Math.min(100, settings.musicVol)));
+    sfxEnabledToggle.checked = !!settings.sfxEnabled;
+
+    musicEnabled = !!settings.musicEnabled;
+    musicVolume = (Number(settings.musicVol) || 0) / 100;
+    sfxEnabled = !!settings.sfxEnabled;
+
+    ensureAudio();
+    if(!musicEnabled || musicVolume <= 0){
+      stopMusic();
+    } else {
+      if(started && !paused && !gameOver) startMusic();
+    }
+    saveSettings();
+  }
+
+  // ===== Game state =====
+  let grid, current, nextPiece;
+  let score=0, lines=0, level=1;
+  let dropTimer=0, lastTime=0;
+  let paused=false, gameOver=false, started=false;
+
+  let bag = [];
+  const keyState = new Set();
+
+  function newGrid(){ return Array.from({length: ROWS + 2}, () => Array(COLS).fill(null)); }
+  function refillBag(){
+    bag = TYPES.slice();
+    for(let i=bag.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+  }
+  function getNextType(){ if(bag.length===0) refillBag(); return bag.pop(); }
+  function cloneMatrix(m){ return m.map(r=>r.slice()); }
+  function rotateCW(m){
+    const N=m.length;
+    const r=Array.from({length:N},()=>Array(N).fill(0));
+    for(let y=0;y<N;y++) for(let x=0;x<N;x++) r[x][N-1-y]=m[y][x];
+    return r;
+  }
+  function rotateCCW(m){
+    const N=m.length;
+    const r=Array.from({length:N},()=>Array(N).fill(0));
+    for(let y=0;y<N;y++) for(let x=0;x<N;x++) r[N-1-x][y]=m[y][x];
+    return r;
+  }
+  function makePiece(type){
+    return { type, matrix: cloneMatrix(SHAPES[type]), x: Math.floor((COLS-4)/2), y: 0 };
+  }
+  function collides(p, ox=0, oy=0, matrix=p.matrix){
+    for(let r=0;r<4;r++){
+      for(let c=0;c<4;c++){
+        if(!matrix[r][c]) continue;
+        const gx=p.x+c+ox, gy=p.y+r+oy;
+        if(gx<0||gx>=COLS) return true;
+        if(gy>=grid.length) return true;
+        if(gy>=0 && grid[gy][gx]) return true;
+      }
+    }
+    return false;
+  }
+  function merge(p){
+    for(let r=0;r<4;r++) for(let c=0;c<4;c++){
+      if(!p.matrix[r][c]) continue;
+      const gx=p.x+c, gy=p.y+r;
+      if(gy>=0 && gy<grid.length && gx>=0 && gx<COLS) grid[gy][gx]=p.type;
+    }
+  }
+  function updateUI(){
+    $score.textContent=score;
+    $lines.textContent=lines;
+    $level.textContent=level;
+
+    $score2.textContent=score;
+    $lines2.textContent=lines;
+    $level2.textContent=level;
+  }
+
+  // ===== Drawing =====
+  function drawCell(x,y,color,alpha=1){
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle=color;
+    const px=x*BLOCK, py=y*BLOCK;
+    ctx.fillRect(px+1, py+1, BLOCK-2, BLOCK-2);
+    ctx.globalAlpha=alpha*0.25;
+    ctx.fillStyle="#fff";
+    ctx.fillRect(px+2, py+2, BLOCK-4, Math.max(2, Math.floor(BLOCK*0.18)));
+    ctx.restore();
+  }
+  function drawGridLines(){
+    ctx.save();
+    ctx.strokeStyle = COLORS.GRID;
+    ctx.lineWidth=1;
+    for(let x=0;x<=COLS;x++){
+      ctx.beginPath();
+      ctx.moveTo(x*BLOCK+0.5,0);
+      ctx.lineTo(x*BLOCK+0.5,ROWS*BLOCK);
+      ctx.stroke();
+    }
+    for(let y=0;y<=ROWS;y++){
+      ctx.beginPath();
+      ctx.moveTo(0,y*BLOCK+0.5);
+      ctx.lineTo(COLS*BLOCK,y*BLOCK+0.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function overlayText(text){
+    ctx.save();
+    ctx.fillStyle="rgba(0,0,0,0.55)";
+    ctx.fillRect(0,0,boardCanvas.width,boardCanvas.height);
+    ctx.fillStyle="#fff";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.font='1100 30px ui-monospace,Menlo,Consolas,monospace';
+    const lines = text.split("\n");
+    const midY = boardCanvas.height/2;
+    const startY = midY - (lines.length-1)*20;
+    lines.forEach((ln,i)=>ctx.fillText(ln, boardCanvas.width/2, startY+i*42));
+    ctx.restore();
+  }
+  function getGhostY(p){
+    let d=0;
+    while(!collides(p,0,d+1)) d++;
+    return p.y+d;
+  }
+  function drawBoard(){
+    ctx.clearRect(0,0,boardCanvas.width,boardCanvas.height);
+    for(let y=2;y<grid.length;y++){
+      for(let x=0;x<COLS;x++){
+        const t=grid[y][x];
+        if(t) drawCell(x, y-2, COLORS[t], 1);
+      }
+    }
+    if(!gameOver && started){
+      const gy = getGhostY(current);
+      for(let r=0;r<4;r++) for(let c=0;c<4;c++){
+        if(!current.matrix[r][c]) continue;
+        const gx=current.x+c, yy=gy+r;
+        if(yy>=2) drawCell(gx, yy-2, COLORS.GHOST, 1);
+      }
+      for(let r=0;r<4;r++) for(let c=0;c<4;c++){
+        if(!current.matrix[r][c]) continue;
+        const gx=current.x+c, yy=current.y+r;
+        if(yy>=2) drawCell(gx, yy-2, COLORS[current.type], 1);
+      }
+    }
+    drawGridLines();
+
+    if(!started) overlayText("TRYCK STARTA");
+    else if(paused && !gameOver) overlayText("PAUS");
+    else if(gameOver) overlayText("GAME OVER\nMENY = omstart");
+  }
+
+  function drawNextTo(ctx2, canvas, piece){
+    ctx2.clearRect(0,0,canvas.width,canvas.height);
+    ctx2.fillStyle='rgba(0,0,0,0.10)';
+    ctx2.fillRect(0,0,canvas.width,canvas.height);
+
+    const m = piece.matrix;
+    const ox = Math.floor((canvas.width - 4*16)/2);
+    const oy = Math.floor((canvas.height - 4*16)/2);
+
+    for(let r=0;r<4;r++) for(let c=0;c<4;c++){
+      if(!m[r][c]) continue;
+      const x=ox+c*16, y=oy+r*16;
+      ctx2.save();
+      ctx2.fillStyle=COLORS[piece.type];
+      ctx2.fillRect(x+1,y+1,16-2,16-2);
+      ctx2.globalAlpha=0.25;
+      ctx2.fillStyle="#fff";
+      ctx2.fillRect(x+2,y+2,16-4,Math.max(2,Math.floor(16*0.18)));
+      ctx2.restore();
+    }
+  }
+
+  function drawNext(){
+    if(!nextPiece) return;
+    if(settings.showNext){
+      drawNextTo(nctx, nextCanvas, nextPiece);
+      drawNextTo(nctxSmall, nextSmallCanvas, nextPiece);
+    } else {
+      nctx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
+      nctxSmall.clearRect(0,0,nextSmallCanvas.width,nextSmallCanvas.height);
+    }
+  }
+
+  // ===== Gameplay =====
+  function clearLines(){
+    let cleared=0;
+    for(let y=0;y<grid.length;y++){
+      if(grid[y].every(cell=>cell!==null)){
+        grid.splice(y,1);
+        grid.unshift(Array(COLS).fill(null));
+        cleared++;
+      }
+    }
+    if(cleared>0){
+      const table=[0,100,300,500,800];
+      score += (table[cleared]||0)*level;
+      lines += cleared;
+
+      if(cleared===4) sfxChord([262,330,392,523],0.16,"triangle",0.8);
+      else sfxBeep(440+cleared*90,0.08,"square",0.8);
+
+      const newLevel=Math.floor(lines/10)+1;
+      if(newLevel!==level){
+        level=newLevel;
+        sfxBeep(880,0.08,"square",0.8);
+      }
+      updateUI();
+    }
+  }
+  function spawn(){
+    current = nextPiece || makePiece(getNextType());
+    nextPiece = makePiece(getNextType());
+    if(collides(current,0,0)){
+      gameOver=true;
+      onGameOver();
+    }
+    drawNext();
+  }
+  function lock(){
+    merge(current);
+    sfxBeep(220,0.05,"triangle",0.6);
+    clearLines();
+    spawn();
+  }
+  function move(dx){
+    if(!started||paused||gameOver) return;
+    if(!collides(current,dx,0)){
+      current.x += dx;
+      sfxBeep(320,0.02,"square",0.35);
+    }
+  }
+  function tryRotate(dir){
+    if(!started||paused||gameOver) return;
+    const rotated = dir==="CW" ? rotateCW(current.matrix) : rotateCCW(current.matrix);
+    const kicks=[0,-1,1,-2,2];
+    for(const k of kicks){
+      if(!collides(current,k,0,rotated)){
+        current.x += k;
+        current.matrix = rotated;
+        sfxBeep(540,0.04,"square",0.5);
+        return;
+      }
+    }
+    sfxBeep(160,0.05,"sawtooth",0.4);
+  }
+  function softDrop(){
+    if(!started||paused||gameOver) return;
+    if(!collides(current,0,1)){
+      current.y += 1;
+      score += 1;
+      updateUI();
+    } else lock();
+  }
+  function hardDrop(){
+    if(!started||paused||gameOver) return;
+    let d=0;
+    while(!collides(current,0,d+1)) d++;
+    current.y += d;
+    score += d*2;
+    sfxBeep(760,0.05,"square",0.8);
+    lock();
+    updateUI();
+  }
+  function tickFall(deltaMs){
+    const base=800;
+    const interval=Math.max(80, base-(level-1)*60);
+    dropTimer += deltaMs;
+    while(dropTimer >= interval){
+      dropTimer -= interval;
+      if(!collides(current,0,1)) current.y += 1;
+      else { lock(); break; }
+    }
+  }
+
+  // ===== Flow =====
+  function setPauseIcon(){
+    const icon = paused ? "▶" : "⏸";
+    btnPauseTop.textContent = icon;
+  }
+  function togglePause(){
+    if(!started||gameOver) return;
+    paused=!paused;
+    setPauseIcon();
+    $stateText.textContent = paused ? "Paus" : "Spelar";
+    sfxBeep(paused?200:400,0.06,"triangle",0.6);
+    if(paused) stopMusic();
+    else startMusic();
+  }
+
+  function openMenu(){ menu.classList.remove("hidden"); }
+  function closeMenu(){ menu.classList.add("hidden"); }
+
+  function startGame(){
+    splash.classList.add("hidden");
+    if(!started){
+      restart();
+      started=true;
+      gameOver=false;
+      paused=false;
+      setPauseIcon();
+      $stateText.textContent="Spelar";
+      sfxBeep(660,0.08,"square",0.9);
+      startMusic();
+    }
+  }
+  function onGameOver(){
+    stopMusic();
+    sfxChord([196,165,147],0.25,"sawtooth",0.8);
+    addHighscore(score);
+    $stateText.textContent="Game Over";
+    openMenu();
+  }
+  function restart(){
+    grid=newGrid();
+    score=0; lines=0; level=1;
+    dropTimer=0;
+    lastTime=performance.now();
+    paused=false; gameOver=false;
+    keyState.clear();
+    bag=[]; refillBag();
+    nextPiece=makePiece(getNextType());
+    spawn();
+    updateUI();
+    drawNext();
+  }
+
+  function loop(t){
+    const delta = Math.min(50, t-lastTime);
+    lastTime=t;
+
+    if(started && !paused && !gameOver){
+      tickFall(delta);
+      if(keyState.has("arrowdown")) softDrop();
+    }
+    drawBoard();
+    requestAnimationFrame(loop);
+  }
+
+  // ===== Input =====
+  function onFirstGesture(){
+    unlockAudio();
+    applySettings();
+    resizeBoard();
+  }
+  window.addEventListener('pointerdown', onFirstGesture, { once:true });
+  window.addEventListener('keydown', onFirstGesture, { once:true });
+
+  window.addEventListener("keydown",(e)=>{
+    const k=e.key.toLowerCase();
+    if (['arrowleft','arrowright','arrowdown','arrowup',' '].includes(e.key)) e.preventDefault();
+
+    if(k==="p") togglePause();
+    if(k==="r") restart();
+    if(k==="enter" && !started) startGame();
+
+    if(!started || paused || gameOver){ keyState.add(k); return; }
+
+    if(!keyState.has(k)){
+      if(e.key==="ArrowLeft") move(-1);
+      if(e.key==="ArrowRight") move(1);
+      if(e.key==="ArrowUp" || k==="x") tryRotate("CW");
+      if(k==="z") tryRotate("CCW");
+      if(e.key===" ") hardDrop();
+    }
+    keyState.add(k);
+  });
+  window.addEventListener("keyup",(e)=>keyState.delete(e.key.toLowerCase()));
+
+  // ===== Buttons =====
+  btnPauseTop.addEventListener("click",()=>{ unlockAudio(); togglePause(); });
+  btnMenu.addEventListener("click",()=>{ unlockAudio(); openMenu(); });
+
+  btnStart.addEventListener("click",()=>{ unlockAudio(); startGame(); });
+  btnCloseSplash.addEventListener("click",()=>splash.classList.add("hidden"));
+
+  btnCloseMenu.addEventListener("click",()=>closeMenu());
+  btnPauseMenu.addEventListener("click",()=>{ unlockAudio(); togglePause(); });
+  btnRestartMenu.addEventListener("click",()=>{ unlockAudio(); restart(); closeMenu(); });
+
+  // Mobile controls
+  function bindHold(btn, fn, interval=85){
+    let timer=null;
+    const start=(ev)=>{
+      ev.preventDefault();
+      unlockAudio();
+      if(!started) startGame();
+      fn();
+      timer=setInterval(fn, interval);
+      btn.setPointerCapture?.(ev.pointerId);
+    };
+    const stop=()=>{ if(timer) clearInterval(timer); timer=null; };
+    btn.addEventListener("pointerdown",start);
+    btn.addEventListener("pointerup",stop);
+    btn.addEventListener("pointercancel",stop);
+    btn.addEventListener("pointerleave",stop);
+    btn.addEventListener("contextmenu",(e)=>e.preventDefault());
+  }
+  bindHold(mLeft, ()=>move(-1), 85);
+  bindHold(mRight, ()=>move(1), 85);
+  bindHold(mDown, ()=>softDrop(), 55);
+
+  mRotate.addEventListener("pointerdown",(e)=>{ e.preventDefault(); unlockAudio(); if(!started) startGame(); tryRotate("CW"); });
+  mDrop.addEventListener("pointerdown",(e)=>{ e.preventDefault(); unlockAudio(); if(!started) startGame(); hardDrop(); });
+  mMenu.addEventListener("pointerdown",(e)=>{ e.preventDefault(); unlockAudio(); openMenu(); });
+
+  window.addEventListener('touchmove', (e) => e.preventDefault(), { passive:false });
+
+  // ===== Settings UI events =====
+  showNextToggle.addEventListener("change",()=>{
+    settings.showNext = showNextToggle.checked;
+    applySettings();
+    drawNext();
+    setTimeout(resizeBoard, 50);
+  });
+  musicEnabledToggle.addEventListener("change",()=>{
+    settings.musicEnabled = musicEnabledToggle.checked;
+    applySettings();
+  });
+  musicVolSlider.addEventListener("input",()=>{
+    settings.musicVol = Number(musicVolSlider.value);
+    applySettings();
+  });
+  sfxEnabledToggle.addEventListener("change",()=>{
+    settings.sfxEnabled = sfxEnabledToggle.checked;
+    applySettings();
+  });
+
+  // ===== Boot =====
+  loadSettings();
+  renderHighscores();
+  applySettings();
+  restart();
+  started=false;
+  paused=false;
+  setPauseIcon();
+  $stateText.textContent="Intro";
+
+  setTimeout(resizeBoard, 50);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
