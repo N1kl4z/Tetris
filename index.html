@@ -422,7 +422,50 @@
     @media (min-width: 980px){
       :root{ --panelW: 190px; }
     }
-  </style>
+  
+    /* Toast / FX */
+    .toast{
+      position:fixed;
+      left:50%;
+      top:22%;
+      transform:translateX(-50%);
+      z-index:80;
+      pointer-events:none;
+      padding:14px 18px;
+      border-radius:16px;
+      background:rgba(10,10,14,.55);
+      border:1px solid rgba(255,255,255,.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 14px 40px rgba(0,0,0,.55);
+      opacity:0;
+    }
+    .toast.show{
+      animation: toastPop 1.05s ease-out forwards;
+    }
+    @keyframes toastPop{
+      0%{ opacity:0; transform:translateX(-50%) translateY(12px) scale(.88) rotate(-6deg); filter:blur(2px); }
+      18%{ opacity:1; transform:translateX(-50%) translateY(0) scale(1.04) rotate(-6deg); filter:blur(0); }
+      55%{ opacity:1; transform:translateX(-50%) translateY(-2px) scale(1.0) rotate(-6deg); }
+      100%{ opacity:0; transform:translateX(-50%) translateY(-10px) scale(.98) rotate(-6deg); }
+    }
+    .toast .big{
+      font-weight:900;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      font-size:28px;
+      line-height:1;
+      text-shadow: 0 0 18px rgba(255,220,120,.45), 0 0 40px rgba(255,120,120,.25);
+    }
+    .toast .sub{
+      margin-top:6px;
+      font-size:12px;
+      opacity:.85;
+      letter-spacing:1px;
+      text-align:center;
+    }
+
+</style>
 </head>
 <body>
   <div class="app">
@@ -579,14 +622,48 @@
       <div class="menuRow">
         <div class="left">
           <div class="t">Visa “Nästa kloss”</div>
-          <div class="d">Påverkar både HUD (porträtt) och sidopanel (landskap).</div>
+          <div class="d">Visar nästa kloss i högerspalten.</div>
         </div>
         <div class="toggle">
           <input id="showNext" type="checkbox" />
         </div>
       </div>
 
+      
       <div class="menuRow">
+        <div class="left">
+          <div class="t">Visa “Skugga”</div>
+          <div class="d">Visar var klossen landar om du droppar rakt ner.</div>
+        </div>
+        <div class="toggle">
+          <input id="showGhost" type="checkbox" />
+        </div>
+      </div>
+
+      <div class="menuRow">
+        <div class="left">
+          <div class="t">Spelarnamn</div>
+          <div class="d">Sparas lokalt och används i highscore-listan.</div>
+        </div>
+        <div class="toggle" style="display:flex;gap:8px;align-items:center;">
+          <input id="playerNameMenu" type="text" maxlength="16" placeholder="Ditt namn" style="width:160px;padding:10px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.20);color:var(--text);" />
+          <button id="btnNameApply" style="padding:10px 12px;">Spara</button>
+        </div>
+      </div>
+
+      <div class="menuRow">
+        <div class="left">
+          <div class="t">Global topplista (Firebase)</div>
+          <div class="d">Valfritt: fyll i Firebase-config i koden för att synka mellan enheter.</div>
+        </div>
+        <div class="toggle">
+          <button id="btnGlobalRefresh">Uppdatera</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;opacity:.9;font-size:12px;">
+        <ul id="globalList" class="hsList"></ul>
+      </div>
+<div class="menuRow">
         <div class="left">
           <div class="t">Paus</div>
           <div class="d">Stoppar tiden. (Du kan också trycka ⏸ uppe.)</div>
@@ -675,9 +752,10 @@
   const mMenu = document.getElementById('mMenu');
 
   // ===== Settings (localStorage) =====
-  const SETTINGS_KEY = "mr_bdsm_tetris_settings_v3";
+  const SETTINGS_KEY = "mr_bdsm_tetris_settings_v4";
   const defaultSettings = {
     showNext: true,
+    showGhost: true,
     musicEnabled: true,
     musicVol: 55,
     sfxEnabled: true
@@ -696,6 +774,27 @@
   function saveSettings(){
     try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch{}
   }
+
+
+  const NAME_KEY = "mr_bdsm_tetris_player_name_v1";
+  function loadName(){
+    try{ return (localStorage.getItem(NAME_KEY)||"").trim().slice(0,16); }catch{ return ""; }
+  }
+  function saveName(n){
+    try{ localStorage.setItem(NAME_KEY, (n||"").trim().slice(0,16)); }catch{}
+  }
+
+  // ===== Global leaderboard (Firebase - valfritt) =====
+  const firebaseEnabled = true; // aktiverad
+  const firebaseConfig = {
+    apiKey: "AIzaSyBR7Bmv7xH_bgIb8L7xCOfkvethoL8_Zo8",
+    authDomain: "tetris-a0a8b.firebaseapp.com",
+    projectId: "tetris-a0a8b",
+    storageBucket: "tetris-a0a8b.firebasestorage.app",
+    messagingSenderId: "243234353630",
+    appId: "1:243234353630:web:a64bb0bd4b6cd1dd2ced4f"
+  };
+  const FIRE_COLLECTION = "scores";
 
   // ===== Responsive board sizing =====
   function isPortraitHUD(){
@@ -761,7 +860,25 @@
       const raw = localStorage.getItem(HS_KEY);
       const arr = raw ? JSON.parse(raw) : [];
       if(!Array.isArray(arr)) return [];
-      return arr.filter(n => Number.isFinite(n)).map(n => Math.max(0, Math.floor(n)));
+      // Backwards compat: [123, 45, ...]
+      if(arr.length && typeof arr[0] === "number"){
+        const fallbackName = loadName() || "Anonym";
+        return arr
+          .filter(n => Number.isFinite(n))
+          .map(n => ({ name: fallbackName, score: Math.max(0, Math.floor(n)), ts: Date.now() }))
+          .sort((a,b)=>b.score-a.score)
+          .slice(0,10);
+      }
+      // New format: [{name, score, ts}]
+      return arr
+        .filter(o => o && typeof o === "object" && Number.isFinite(o.score))
+        .map(o => ({
+          name: (o.name||"Anonym").toString().trim().slice(0,16) || "Anonym",
+          score: Math.max(0, Math.floor(o.score)),
+          ts: Number.isFinite(o.ts) ? o.ts : Date.now()
+        }))
+        .sort((a,b)=>b.score-a.score)
+        .slice(0,10);
     }catch{ return []; }
   }
   function saveHighscores(arr){
@@ -769,7 +886,7 @@
   }
   function renderHighscores(){
     const hs = loadHighscores();
-    const best = hs[0] ?? 0;
+    const best = hs[0]?.score ?? 0;
     $bestScore.textContent = best;
     $bestInline.textContent = best;
     $bestInline2.textContent = best;
@@ -782,18 +899,35 @@
       $hsList.appendChild(li);
       return;
     }
-    for(const n of top){
+    for(const e of top){
       const li = document.createElement("li");
-      li.textContent = n.toString();
+      li.textContent = `${e.name} — ${e.score}`;
       $hsList.appendChild(li);
     }
   }
-  function addHighscore(s){
+  let pendingScore = null;
+
+  function addHighscoreScoreOnly(s){
+    const name = loadName() || "Anonym";
+    const entry = { name, score: Math.max(0, Math.floor(s)), ts: Date.now() };
     const hs = loadHighscores();
-    hs.push(s);
-    hs.sort((a,b)=>b-a);
+    hs.push(entry);
+    hs.sort((a,b)=>b.score-a.score);
     saveHighscores(hs);
     renderHighscores();
+    submitGlobalScore(entry).catch(()=>{});
+  }
+
+  function addHighscore(s){
+    s = Math.max(0, Math.floor(s||0));
+    if(s <= 0) return;
+    const currentName = loadName();
+    if(!currentName){
+      pendingScore = s;
+      openNameOverlay();
+      return;
+    }
+    addHighscoreScoreOnly(s);
   }
 
   // ===== Audio =====
@@ -943,9 +1077,14 @@
     nextSmallCanvas.style.display = settings.showNext ? "block" : "none";
 
     showNextToggle.checked = !!settings.showNext;
+    const showGhostToggle = document.getElementById('showGhost');
+    if(showGhostToggle) showGhostToggle.checked = !!settings.showGhost;
     musicEnabledToggle.checked = !!settings.musicEnabled;
     musicVolSlider.value = String(Math.max(0, Math.min(100, settings.musicVol)));
     sfxEnabledToggle.checked = !!settings.sfxEnabled;
+
+    const pn = document.getElementById('playerNameMenu');
+    if(pn) pn.value = loadName();
 
     musicEnabled = !!settings.musicEnabled;
     musicVolume = (Number(settings.musicVol) || 0) / 100;
@@ -1081,11 +1220,13 @@
       }
     }
     if(!gameOver && started){
-      const gy = getGhostY(current);
+      if(settings.showGhost){
+        const gy = getGhostY(current);
       for(let r=0;r<4;r++) for(let c=0;c<4;c++){
         if(!current.matrix[r][c]) continue;
         const gx=current.x+c, yy=gy+r;
         if(yy>=2) drawCell(gx, yy-2, COLORS.GHOST, 1);
+      }
       }
       for(let r=0;r<4;r++) for(let c=0;c<4;c++){
         if(!current.matrix[r][c]) continue;
@@ -1148,8 +1289,14 @@
       score += (table[cleared]||0)*level;
       lines += cleared;
 
-      if(cleared===4) sfxChord([262,330,392,523],0.16,"triangle",0.8);
-      else sfxBeep(440+cleared*90,0.08,"square",0.8);
+      if(cleared===4){
+        score += 300; // GRANDSLAM bonus
+        showGrandSlam();
+        if(navigator.vibrate) navigator.vibrate(25);
+        sfxChord([262,330,392,523],0.16,"triangle",0.9);
+      } else {
+        sfxBeep(440+cleared*90,0.08,"square",0.8);
+      }
 
       const newLevel=Math.floor(lines/10)+1;
       if(newLevel!==level){
@@ -1239,8 +1386,96 @@
     else startMusic();
   }
 
-  function openMenu(){ menu.classList.remove("hidden"); }
-  function closeMenu(){ menu.classList.add("hidden"); }
+  
+  let menuPrevPaused = false;
+
+  function openMenu(){
+    // Pausa spelet när menyn öppnas (bättre UX)
+    menuPrevPaused = paused;
+    if(started && !gameOver){
+      paused = true;
+      setPauseIcon();
+      $stateText.textContent = "Paus";
+      stopMusic();
+    }
+    menu.classList.remove("hidden");
+  }
+  function closeMenu(){
+    menu.classList.add("hidden");
+    // Fortsätt bara om spelet inte var pausat innan menyn öppnades
+    if(started && !gameOver && !menuPrevPaused){
+      paused = false;
+      setPauseIcon();
+      $stateText.textContent = "Spelar";
+      startMusic();
+    }
+  }
+
+  function showGrandSlam(){
+    const t = document.getElementById("gsToast");
+    if(!t) return;
+    t.classList.remove("show");
+    void t.offsetWidth; // reflow
+    t.classList.add("show");
+  }
+
+  const nameOverlay = document.getElementById("nameOverlay");
+  const playerNameInput = document.getElementById("playerNameInput");
+  function openNameOverlay(){
+    if(!nameOverlay) return;
+    nameOverlay.classList.remove("hidden");
+    setTimeout(()=> playerNameInput?.focus(), 60);
+  }
+  function closeNameOverlay(){
+    nameOverlay?.classList.add("hidden");
+  }
+
+  async function initFirebase(){
+    if(!firebaseEnabled) return null;
+    if(!window.firebase || !firebaseConfig?.apiKey) return null;
+    if(initFirebase._db) return initFirebase._db;
+    firebase.initializeApp(firebaseConfig);
+    initFirebase._db = firebase.firestore();
+    return initFirebase._db;
+  }
+  async function submitGlobalScore(entry){
+    const db = await initFirebase();
+    if(!db) return;
+    await db.collection(FIRE_COLLECTION).add({
+      name: entry.name,
+      score: entry.score,
+      device: (navigator.userAgent || "").slice(0, 120),
+      ts: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+
+  async function fetchGlobalTop(){
+    const list = document.getElementById("globalList");
+    if(!list) return;
+    list.innerHTML = "";
+    const db = await initFirebase();
+    if(!db){
+      const li = document.createElement("li");
+      li.textContent = "Global topplista: inte aktiverad (fyll i Firebase-config i koden).";
+      list.appendChild(li);
+      return;
+    }
+    const snap = await db.collection(FIRE_COLLECTION).orderBy("score","desc").limit(10).get();
+    if(snap.empty){
+      const li = document.createElement("li");
+      li.textContent = "Global topplista är tom än.";
+      list.appendChild(li);
+      return;
+    }
+    snap.forEach(doc=>{
+      const d = doc.data() || {};
+      const li = document.createElement("li");
+      const nm = (d.name||"Anonym").toString().slice(0,16);
+      li.textContent = `${nm} — ${Math.floor(d.score||0)}`;
+      list.appendChild(li);
+    });
+  }
 
   function startGame(){
     splash.classList.add("hidden");
@@ -1377,6 +1612,51 @@
     applySettings();
   });
 
+  const showGhostToggle = document.getElementById("showGhost");
+  const playerNameMenu = document.getElementById("playerNameMenu");
+  const btnNameApply = document.getElementById("btnNameApply");
+  const btnGlobalRefresh = document.getElementById("btnGlobalRefresh");
+
+  const btnNameClose = document.getElementById("btnNameClose");
+  const btnNameSave = document.getElementById("btnNameSave");
+
+  showGhostToggle?.addEventListener("change",()=>{
+    settings.showGhost = showGhostToggle.checked;
+    saveSettings();
+    drawBoard();
+  });
+
+  function applyNameFromUI(){
+    const n = (playerNameMenu?.value || "").trim().slice(0,16);
+    saveName(n);
+    if(playerNameMenu) playerNameMenu.value = loadName();
+  }
+  btnNameApply?.addEventListener("click", applyNameFromUI);
+
+  btnGlobalRefresh?.addEventListener("click", ()=>{
+    fetchGlobalTop().catch(()=>{});
+  });
+
+  btnNameClose?.addEventListener("click", ()=>{
+    closeNameOverlay();
+  });
+
+  btnNameSave?.addEventListener("click", ()=>{
+    const n = (playerNameInput?.value || "").trim().slice(0,16);
+    if(!n){
+      sfxBeep(220,0.06,"square",0.6);
+      return;
+    }
+    saveName(n);
+    if(playerNameMenu) playerNameMenu.value = n;
+    closeNameOverlay();
+    if(pendingScore !== null){
+      const s = pendingScore;
+      pendingScore = null;
+      addHighscoreScoreOnly(s);
+    }
+  });
+
   // ===== Boot =====
   loadSettings();
   renderHighscores();
@@ -1391,5 +1671,37 @@
   requestAnimationFrame(loop);
 })();
 </script>
+
+  <!-- FX toast -->
+  <div id="gsToast" class="toast">
+    <div class="big">GRANDSLAM</div>
+    <div class="sub">+300 poäng</div>
+  </div>
+
+  <!-- Name entry overlay -->
+  <div id="nameOverlay" class="overlay hidden" style="z-index:90;">
+    <div class="panel" style="max-width:520px;">
+      <div class="menuTitle">
+        <b>Spara highscore</b>
+        <button id="btnNameClose" aria-label="Stäng">✕</button>
+      </div>
+      <div style="opacity:.85;font-size:12px;line-height:1.5;margin-bottom:10px;">
+        Skriv ett namn som ska visas i topplistan.
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <input id="playerNameInput" type="text" maxlength="16" placeholder="Ditt namn" style="flex:1;padding:12px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.25);color:var(--text);" />
+        <button id="btnNameSave" style="min-width:120px;">Spara</button>
+      </div>
+      <div style="opacity:.7;font-size:11px;margin-top:8px;">
+        Tips: du kan ändra namn senare i menyn.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Firebase (valfritt, för global topplista). Låt firebaseEnabled=false om du inte vill använda detta. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
 </body>
 </html>
